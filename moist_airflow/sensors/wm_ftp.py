@@ -31,7 +31,6 @@ import ftplib
 # External modules
 from airflow.operators.sensors import BaseSensorOperator
 from airflow.utils.decorators import apply_defaults
-from airflow.plugins_manager import AirflowPlugin
 from airflow.contrib.hooks.ftp_hook import FTPHook
 
 
@@ -123,6 +122,20 @@ class WettermastFTPSensor(BaseSensorOperator):
         return FTPHook(self.ftp_conn_id)
 
     def poke(self, context):
+        """
+        Compares disk file size and ftp file size for given generated file name
+        based on the execution date.
+
+        Parameters
+        ----------
+        context : dict
+            The airflow task instance context.
+
+        Returns
+        -------
+        bool
+            If the ftp file size is bigger than the disk file size.
+        """
         wm_filename = get_filename(context['execution_date'])
         disk_file_path = os.path.join(self.disk_path, wm_filename)
         try:
@@ -145,7 +158,6 @@ class WettermastFTPSensor(BaseSensorOperator):
                 ftp_size = conn.size(wm_filename)
             except ftplib.error_perm as e:
                 raise e
-
         if ftp_size > disk_file_size:
             return True
         return False
