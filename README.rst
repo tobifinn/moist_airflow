@@ -2,9 +2,11 @@ MOiSt-Airflow
 =============
 
 
-Model Output (integrated) Statistics based on airflow
------------------------------------------------------
-MOiSt-Airflow is a package of airflow operators and direct acyclic graphs to
+Model Output (integrated) Statistics based on apache-airflow
+------------------------------------------------------------
+MOiSt-Airflow is a package of
+`apache-airflow <https://github.com/apache/incubator-airflow>`_ operators and
+direct acyclic graphs to
 post-process meteorological data for the purpose of model output statistics
 (MOS). This package will be used to generate the forecast for a measurement
 station in Hamburg (Germany) called "Wettermast Hamburg". Also this package
