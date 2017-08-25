@@ -33,7 +33,6 @@ from airflow.operators.sensors import BaseSensorOperator
 from airflow.utils.decorators import apply_defaults
 from airflow.contrib.hooks.ftp_hook import FTPHook
 
-
 # Internal modules
 
 
@@ -138,8 +137,10 @@ class WettermastFTPSensor(BaseSensorOperator):
         """
         wm_filename = get_filename(context['execution_date'])
         disk_file_path = os.path.join(self.disk_path, wm_filename)
+        file_downloaded = False
         try:
             disk_file_size = os.path.getsize(disk_file_path)
+            file_downloaded = True
         except FileNotFoundError:
             disk_file_size = -1
         ftp_size = -2
@@ -158,6 +159,9 @@ class WettermastFTPSensor(BaseSensorOperator):
                 ftp_size = conn.size(wm_filename)
             except ftplib.error_perm as e:
                 raise e
-        if ftp_size > disk_file_size:
+        if ftp_size != disk_file_size:
             return True
-        return False
+        elif file_downloaded:
+            raise FileExistsError('The file was already downloaded')
+        else:
+            return False
