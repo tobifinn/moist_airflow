@@ -27,6 +27,7 @@
 import os
 import logging
 import ftplib
+import datetime
 
 # External modules
 from airflow.operators.sensors import BaseSensorOperator
@@ -38,7 +39,7 @@ from airflow.contrib.hooks.ftp_hook import FTPHook
 
 logger = logging.getLogger(__name__)
 
-FILENAME_TEMPLATE = '%Y_W%W_MASTER_M10.txt'
+FILENAME_TEMPLATE = '%G_W%V_MASTER_M10.txt'
 
 
 def get_filename(date):
@@ -103,7 +104,7 @@ class WettermastFTPSensor(BaseSensorOperator):
         if not isinstance(path, str):
             raise TypeError('The given disk path is not a string!')
         elif os.path.isfile(path):
-            raise TypeError('The given path is already a file!')
+            raise TypeError('The given path is a file!')
         elif not os.path.isdir(path):
             os.makedirs(path)
         else:
@@ -141,14 +142,21 @@ class WettermastFTPSensor(BaseSensorOperator):
         try:
             disk_file_size = os.path.getsize(disk_file_path)
             file_downloaded = True
+            logger.info('The file {0:s} is available with size {1:.2f}'.format(
+                disk_file_path, disk_file_size
+            ))
         except FileNotFoundError:
             disk_file_size = -1
+            logger.info('The file {0:s} is not available'.format(
+                disk_file_path))
         ftp_size = -2
         with self._create_hook() as hook:
             try:
                 hook.get_mod_time(wm_filename)
             except ftplib.error_perm as e:
                 error = str(e).split(None, 1)
+                logger.error('The ftp connection has an error: {0}'.format(
+                    error))
                 if error[1] != "{0:s}: No such file or directory".format(
                         wm_filename):
                     raise e
@@ -158,10 +166,17 @@ class WettermastFTPSensor(BaseSensorOperator):
                 conn.sendcmd("TYPE i")
                 ftp_size = conn.size(wm_filename)
             except ftplib.error_perm as e:
+                logger.error('The file couldn\'t downloaded: {0}'.format(
+                    e))
                 raise e
+        now_week = datetime.datetime.now().isocalendar()[1]
+        execution_week = context['execution_time'].isocalendar()[1]
+        old_file = now_week > execution_week
         if ftp_size != disk_file_size:
+            logger.info('The ftp file size differs from disk file size')
             return True
-        elif file_downloaded:
+        elif file_downloaded and old_file:
+            logger.info('The file was already downloaded')
             raise FileExistsError('The file was already downloaded')
         else:
             return False
