@@ -43,8 +43,7 @@ class WMFTPDownloader(BaseOperator):
     @apply_defaults
     def __init__(self, disk_path, ftp_conn_id, *args, **kwargs):
         """
-        The WettermastFTPSensor is used to check if new measurement content is
-        available, based on a Wettermast ascii file.
+        The WMFTPDownloader is used to download new Wettermast content.
 
         Parameters
         ----------
@@ -53,10 +52,6 @@ class WMFTPDownloader(BaseOperator):
         ftp_conn_id : str
             The connection id for the ftp connection. The connection is searched
             within the defined airflow connections.
-
-        Notes
-        -----
-        Partially this method is based on airflow/contrib/sensors/ftp_sensor.py
         """
         super().__init__(*args, **kwargs)
         self._ftp_conn_id = None
@@ -84,7 +79,7 @@ class WMFTPDownloader(BaseOperator):
         if not isinstance(path, str):
             raise TypeError('The given disk path is not a string!')
         elif os.path.isfile(path):
-            raise TypeError('The given path is already a file!')
+            raise TypeError('The given path is a file!')
         elif not os.path.isdir(path):
             os.makedirs(path)
         else:
