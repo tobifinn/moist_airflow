@@ -6,6 +6,7 @@ from moist_airflow.wm_ftp_sensor import WettermastFTPSensor
 from moist_airflow.wm_ftp_dl import WMFTPDownloader
 from moist_airflow.wm_file_available import WMFileAvailable
 from moist_airflow.wm_encode_to_temp import WMEncodeTemp
+from moist_airflow.wm_temp_db import WMTemp2DB
 from datetime import datetime, timedelta
 
 
@@ -51,7 +52,13 @@ encode_wm = WMEncodeTemp(disk_path=FILE_PATH,
                          trigger_rule=TriggerRule.ONE_SUCCESS,
                          dag=dag)
 
+todb_wm = WMTemp2DB(temp_path='/tmp',
+                    db_file='/home/tfinn/Data/wm.json',
+                    task_id='add_to_db_wettermast',
+                    dag=dag)
+
 dl_task.set_upstream(wm_sensor_task)
 already_dl_task.set_upstream(wm_sensor_task)
 encode_wm.set_upstream(dl_task)
 encode_wm.set_upstream(already_dl_task)
+todb_wm.set_upstream(encode_wm)
