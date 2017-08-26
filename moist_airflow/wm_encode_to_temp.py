@@ -1,7 +1,7 @@
 #!/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Created on 23.08.17
+# Created on 26.08.17
 #
 # Created for moist_airflow
 #
@@ -31,6 +31,10 @@ import os
 from airflow.operators.bash_operator import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
+import pandas as pd
+
+import pymepps
+
 # Internal modules
 from .wm_ftp_sensor import get_filename
 
@@ -38,40 +42,33 @@ from .wm_ftp_sensor import get_filename
 logger = logging.getLogger(__name__)
 
 
-class WMFileAvailable(BaseOperator):
+class WMEncodeTemp(BaseOperator):
     @apply_defaults
-    def __init__(self, disk_path, *args, **kwargs):
+    def __init__(self, disk_path, temp_path, *args, **kwargs):
         """
-        WMFileAvailable is used to check if a file is available.
+        WMEncodeTemp is used to encode a Wettermast Ascii to a temporary json
+        file.
 
         Parameters
         ----------
         disk_path : str
             Disk path where the Wettermast files are archived.
+        temp_path : str
+            Temporary path where the json file should be saved.
         """
         super().__init__(*args, **kwargs)
-        self._disk_path = None
         self.disk_path = disk_path
-
-    @property
-    def disk_path(self):
-        return self._disk_path
-
-    @disk_path.setter
-    def disk_path(self, path):
-        if not isinstance(path, str):
-            raise TypeError('The given disk path is not a string!')
-        elif os.path.isfile(path):
-            raise TypeError('The given path is already a file!')
-        elif not os.path.isdir(path):
-            os.makedirs(path)
-        else:
-            self._disk_path = path
+        self.temp_path = temp_path
 
     def execute(self, context):
         wm_filename = get_filename(context['execution_date'])
         disk_file_path = os.path.join(self.disk_path, wm_filename)
-        if not os.path.isfile(disk_file_path):
-            raise FileNotFoundError(
-                'The given file path {0:s} couldn\'t found'.format(
-                    disk_file_path))
+        temp_filename = 'wettermast_{0:s}.json'.format(
+            context['execution_date'].strftime('%Y%m%d%H%M'))
+        temp_file_path = os.path.join(self.temp_path, temp_filename)
+        wm_ds = pymepps.open_station_dataset(disk_file_path, 'wm',
+                                             checking=False)
+        wm_df = wm_ds.select_ds()
+        wm_df.pp.save(temp_file_path)
+
+

@@ -5,6 +5,7 @@ from airflow.utils.trigger_rule import TriggerRule
 from moist_airflow.wm_ftp_sensor import WettermastFTPSensor
 from moist_airflow.wm_ftp_dl import WMFTPDownloader
 from moist_airflow.wm_file_available import WMFileAvailable
+from moist_airflow.wm_encode_to_temp import WMEncodeTemp
 from datetime import datetime, timedelta
 
 
@@ -44,5 +45,13 @@ already_dl_task = WMFileAvailable(disk_path=FILE_PATH,
                                   trigger_rule=TriggerRule.ALL_FAILED,
                                   dag=dag)
 
+encode_wm = WMEncodeTemp(disk_path=FILE_PATH,
+                         temp_path='/tmp',
+                         task_id='encoder_temp_wettermast',
+                         trigger_rule=TriggerRule.ONE_SUCCESS,
+                         dag=dag)
+
 dl_task.set_upstream(wm_sensor_task)
 already_dl_task.set_upstream(wm_sensor_task)
+encode_wm.set_upstream(dl_task)
+encode_wm.set_upstream(already_dl_task)
