@@ -32,46 +32,49 @@ from airflow.operators.bash_operator import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
 # Internal modules
-from .wm_ftp_sensor import get_filename
 
 
 logger = logging.getLogger(__name__)
 
 
-class WMFileAvailable(BaseOperator):
+class FileAvailableOperator(BaseOperator):
     @apply_defaults
-    def __init__(self, disk_path, *args, **kwargs):
+    def __init__(self, parent_dir, filename_template, *args, **kwargs):
         """
-        WMFileAvailable is used to check if a file is available.
+        FileAvailableOperator is used to check if the given file is available.
 
         Parameters
         ----------
-        disk_path : str
-            Disk path where the Wettermast files are archived.
+        parent_dir : str
+            The path to the parent directory of the file.
+        filename_template : str
+            The filename template is used to generated the filename based on the
+            execution date given by the airflow context. The filename template
+            is passed to strftime and should be conform to the datetime format.
         """
         super().__init__(*args, **kwargs)
-        self._disk_path = None
-        self.disk_path = disk_path
+        self._parent_dir = None
+        self.parent_dir = parent_dir
+        self.filename_template = filename_template
 
     @property
-    def disk_path(self):
-        return self._disk_path
+    def parent_dir(self):
+        return self._parent_dir
 
-    @disk_path.setter
-    def disk_path(self, path):
+    @parent_dir.setter
+    def parent_dir(self, path):
         if not isinstance(path, str):
-            raise TypeError('The given disk path is not a string!')
+            raise TypeError('The given parent dir is not a string!')
         elif os.path.isfile(path):
             raise TypeError('The given path is already a file!')
         elif not os.path.isdir(path):
             os.makedirs(path)
         else:
-            self._disk_path = path
+            self._parent_dir = path
 
     def execute(self, context):
-        wm_filename = get_filename(context['execution_date'])
-        disk_file_path = os.path.join(self.disk_path, wm_filename)
-        if not os.path.isfile(disk_file_path):
+        filename = context['execution_date'].strftime(self.filename_template)
+        file_path = os.path.join(self.parent_dir, filename)
+        if not os.path.isfile(file_path):
             raise FileNotFoundError(
-                'The given file path {0:s} couldn\'t found'.format(
-                    disk_file_path))
+                'The given file path {0:s} couldn\'t found'.format(file_path))
