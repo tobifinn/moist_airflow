@@ -39,76 +39,38 @@ from airflow.contrib.hooks.ftp_hook import FTPHook
 
 logger = logging.getLogger(__name__)
 
-FILENAME_TEMPLATE = '%G_W%V_MASTER_M10.txt'
 
-
-def get_filename(date):
-    """
-    Get the filename for given date.
-
-    Parameters
-    ----------
-    date : datetime.datetime
-        The filename is generated for this datetime
-
-    Returns
-    -------
-    filename : str
-        The generated filename.
-    """
-    return date.strftime(FILENAME_TEMPLATE)
-
-
-class WettermastFTPSensor(BaseSensorOperator):
+class FTPSensor(BaseSensorOperator):
     @apply_defaults
-    def __init__(self, disk_path, ftp_conn_id, *args, **kwargs):
+    def __init__(self, filename_template, ftp_conn_id, disk_path='/',
+                 *args, **kwargs):
         """
-        The WettermastFTPSensor is used to check if new measurement content is
-        available, based on a Wettermast ascii file.
+        The ftp sensor is used to check if a given file is available on ftp
+        server and differs from disk.
 
         Parameters
         ----------
-        disk_path : str
-            Disk path where the Wettermast files are archived.
+        filename_template : str
+            The filename template is used to generated the filename based on the
+            execution date given by the airflow context. The filename template
+            is passed to strftime and should be conform to the datetime format.
         ftp_conn_id : str
             The connection id for the ftp connection. The connection is searched
             within the defined airflow connections.
+        disk_path : str, optional
+            The path where the files are archived. If the file is not found
+            within the disk path the sensor checks only if the file is available
+            within the ftp server. Default is '/', where the existence
+            possibility is low.
 
         Notes
         -----
         Partially this method is based on airflow/contrib/sensors/ftp_sensor.py
         """
         super().__init__(*args, **kwargs)
-        self._ftp_conn_id = None
-        self._disk_path = None
         self.disk_path = disk_path
         self.ftp_conn_id = ftp_conn_id
-
-    @property
-    def ftp_conn_id(self):
-        return self._ftp_conn_id
-
-    @ftp_conn_id.setter
-    def ftp_conn_id(self, id):
-        if not isinstance(id, str):
-            raise TypeError('The given connection id is not a string!')
-        else:
-            self._ftp_conn_id = id
-
-    @property
-    def disk_path(self):
-        return self._disk_path
-
-    @disk_path.setter
-    def disk_path(self, path):
-        if not isinstance(path, str):
-            raise TypeError('The given disk path is not a string!')
-        elif os.path.isfile(path):
-            raise TypeError('The given path is a file!')
-        elif not os.path.isdir(path):
-            os.makedirs(path)
-        else:
-            self._disk_path = path
+        self.filename_template = filename_template
 
     def _create_hook(self):
         """
@@ -136,47 +98,45 @@ class WettermastFTPSensor(BaseSensorOperator):
         bool
             If the ftp file size is bigger than the disk file size.
         """
-        wm_filename = get_filename(context['execution_date'])
-        disk_file_path = os.path.join(self.disk_path, wm_filename)
-        file_downloaded = False
-        try:
-            disk_file_size = os.path.getsize(disk_file_path)
-            file_downloaded = True
-            logger.info('The file {0:s} is available with size {1:.2f}'.format(
-                disk_file_path, disk_file_size
-            ))
-        except FileNotFoundError:
-            disk_file_size = -1
-            logger.info('The file {0:s} is not available'.format(
-                disk_file_path))
-        ftp_size = -2
+        filename = context['execution_date'].strftime(self.filename_template)
+        disk_file_path = os.path.join(self.disk_path, filename)
+        ftp_file_size = -1
+        disk_file_size = -1
         with self._create_hook() as hook:
             try:
-                hook.get_mod_time(wm_filename)
+                hook.get_mod_time(filename)
+                logger.info('The file {0:s} is available for given connection '
+                            '{1:s}'.format(filename, self.ftp_conn_id))
             except ftplib.error_perm as e:
                 error = str(e).split(None, 1)
                 logger.error('The ftp connection has an error: {0}'.format(
                     error))
                 if error[1] != "{0:s}: No such file or directory".format(
-                        wm_filename):
+                        filename):
                     raise e
                 return False
             try:
+                disk_file_size = os.path.getsize(disk_file_path)
+                logger.info(
+                    'The file {0:s} is available with size {1:.2f}'.format(
+                        disk_file_path, disk_file_size
+                    ))
+            except FileNotFoundError:
+                logger.info('The file {0:s} is not available'.format(
+                    disk_file_path))
+                return True
+            try:
                 conn = hook.get_conn()
                 conn.sendcmd("TYPE i")
-                ftp_size = conn.size(wm_filename)
+                ftp_file_size = conn.size(filename)
+                logger.info('The file {0:s} has a ftp file size of '
+                            '{1:.2f}'.format(filename, ftp_file_size))
             except ftplib.error_perm as e:
                 logger.error('The file couldn\'t downloaded: {0}'.format(
                     e))
                 raise e
-        now_week = datetime.datetime.now().isocalendar()[1]
-        execution_week = context['execution_time'].isocalendar()[1]
-        old_file = now_week > execution_week
-        if ftp_size != disk_file_size:
+        if ftp_file_size != disk_file_size:
             logger.info('The ftp file size differs from disk file size')
             return True
-        elif file_downloaded and old_file:
-            logger.info('The file was already downloaded')
-            raise FileExistsError('The file was already downloaded')
         else:
             return False
