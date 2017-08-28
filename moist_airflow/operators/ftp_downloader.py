@@ -27,48 +27,42 @@
 import logging
 import os
 
+from airflow.contrib.hooks.ftp_hook import FTPHook
 # External modules
 from airflow.operators.bash_operator import BaseOperator
 from airflow.utils.decorators import apply_defaults
-from airflow.contrib.hooks.ftp_hook import FTPHook
 
 # Internal modules
-from .wm_ftp_sensor import get_filename
-
 
 logger = logging.getLogger(__name__)
 
 
-class WMFTPDownloader(BaseOperator):
+class FTPDownloader(BaseOperator):
     @apply_defaults
-    def __init__(self, disk_path, ftp_conn_id, *args, **kwargs):
+    def __init__(self, filename_template, ftp_conn_id, disk_path, *args,
+                 **kwargs):
         """
-        The WMFTPDownloader is used to download new Wettermast content.
+        The FTP could be used to download ftp content into a given path.
 
         Parameters
         ----------
-        disk_path : str
-            Disk path where the Wettermast files are archived.
+        filename_template : str
+            The filename template is used to generated the filename based on the
+            execution date given by the airflow context. The filename template
+            is passed to strftime and should be conform to the datetime format.
         ftp_conn_id : str
             The connection id for the ftp connection. The connection is searched
             within the defined airflow connections.
+        disk_path : str
+            The path where the file should be archived. If the disk path doesn't
+            exist it will be created.
         """
         super().__init__(*args, **kwargs)
         self._ftp_conn_id = None
         self._disk_path = None
         self.disk_path = disk_path
         self.ftp_conn_id = ftp_conn_id
-
-    @property
-    def ftp_conn_id(self):
-        return self._ftp_conn_id
-
-    @ftp_conn_id.setter
-    def ftp_conn_id(self, id):
-        if not isinstance(id, str):
-            raise TypeError('The given connection id is not a string!')
-        else:
-            self._ftp_conn_id = id
+        self.filename_template = filename_template
 
     @property
     def disk_path(self):
@@ -97,7 +91,7 @@ class WMFTPDownloader(BaseOperator):
         return FTPHook(self.ftp_conn_id)
 
     def execute(self, context):
-        wm_filename = get_filename(context['execution_date'])
-        disk_file_path = os.path.join(self.disk_path, wm_filename)
+        filename = context['execution_date'].strftime(self.filename_template)
+        disk_file_path = os.path.join(self.disk_path, filename)
         with self._create_hook() as hook:
-            hook.retrieve_file(wm_filename, disk_file_path)
+            hook.retrieve_file(filename, disk_file_path)
