@@ -165,7 +165,13 @@ class InOutOperator(BaseOperator):
             context.update(self.op_kwargs)
             context['ds'] = ds
             self.op_kwargs = context
-        ds, return_value = self.python_callable(*self.op_args, **self.op_kwargs)
+        return_value = self.python_callable(*self.op_args, **self.op_kwargs)
+        if isinstance(return_value, tuple):
+            ds = return_value[0]
+            return_value = return_value[1:]
+        else:
+            ds = return_value
+            return_value = None
         self.save_output(ds=ds, input_path=input_path, output_path=output_path)
         logging.info("Done. Returned value was: " + str(return_value))
         return return_value

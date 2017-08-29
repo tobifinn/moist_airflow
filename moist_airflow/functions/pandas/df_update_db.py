@@ -40,21 +40,17 @@ import moist_airflow.functions.utiltities as utils
 logger = logging.getLogger(__name__)
 
 
-def df_update_another(input_path, input_template, another_path,
-                      another_template, time_bound=None, *args, **kwargs):
+def df_update_another(ds, another_path, another_template, time_bound=None,
+                      *args, **kwargs):
     """
     Update a pandas.dataframe based on another pandas.dataframe.
 
     Parameters
     ----------
-    input_path : str
-        The folder where the original dataframe file is saved.
+    ds : pandas.DataFrame
+        This DataFrame is updated by the loaded another dataframe.
     another_path : str
-        The folder where the json file should be saved.
-    input_template : str
-        The filename template of the input file. The filename template is
-        used within the strftime of contexts execution_date. So please see
-        within the datetime documentation for format options
+        The folder where another dataframe file is saved.
     another_template : str
         The filename template of the output file. The filename template is
         used within the strftime of contexts execution_date. So please see
@@ -74,21 +70,5 @@ def df_update_another(input_path, input_template, another_path,
                                   typ='series')
     if isinstance(another_df.index, pd.DatetimeIndex):
         another_df.index = another_df.index.tz_localize('UTC')
-    input_file_path = utils.compose_address(
-        kwargs['execution_date'], input_path, input_template)
-    if os.path.isfile(input_file_path):
-        try:
-            input_df = pd.read_json(input_file_path, orient='split',
-                                    typ='frame')
-        except ValueError:
-            input_df = pd.read_json(input_file_path, orient='split',
-                                    typ='series')
-        if isinstance(input_df.index, pd.DatetimeIndex):
-            input_df.index = input_df.index.tz_localize('UTC')
-        resulting_df = input_df.pp.update(another_df)
-    else:
-        resulting_df = another_df
-    if isinstance(time_bound, datetime.timedelta):
-        resulting_df = resulting_df.loc[
-            resulting_df.index > kwargs['execution_date']-time_bound]
-    resulting_df.to_json(input_file_path, orient='split', date_format='iso')
+    resulting_df = ds.pp.update(another_df)
+    return resulting_df

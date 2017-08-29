@@ -37,26 +37,15 @@ import moist_airflow.functions.utiltities as utils
 logger = logging.getLogger(__name__)
 
 
-def df_extract_columns(input_path, input_template, output_path,
-                       output_template, column_names, *args, **kwargs):
+def df_extract_columns(ds, column_names, *args, **kwargs):
     """
     Extract one or several columns from a pandas.dataframe and save it to a
     given path.
 
     Parameters
     ----------
-    input_path : str
-        The folder where the original wettermast file is saved.
-    output_path : str
-        The folder where the json file should be saved.
-    input_template : str
-        The filename template of the input file. The filename template is
-        used within the strftime of contexts execution_date. So please see
-        within the datetime documentation for format options
-    output_template : str
-        The filename template of the output file. The filename template is
-        used within the strftime of contexts execution_date. So please see
-        within the datetime documentation for format options.
+    ds : pandas.DataFrame
+        The columns are extracted from this dataframe.
     column_names : str or iterable
         The name(s) of column(s) which should be extracted.
 
@@ -64,13 +53,4 @@ def df_extract_columns(input_path, input_template, output_path,
     -----
     Internally this is a wrapper around pandas.dataframe.loc
     """
-    input_file_path = utils.compose_address(
-        kwargs['execution_date'], input_path, input_template)
-    input_df = pd.read_json(input_file_path, orient='split',
-                            typ='frame')
-    if isinstance(input_df.index, pd.DatetimeIndex):
-        input_df.index = input_df.index.tz_localize('UTC')
-    output_df = input_df.loc[:, column_names]
-    output_file_path = utils.compose_address(
-        kwargs['execution_date'], output_path, output_template)
-    output_df.to_json(output_file_path, orient='split', date_format='iso')
+    return ds.loc[:, column_names]

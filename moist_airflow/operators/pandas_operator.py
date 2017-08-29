@@ -88,9 +88,12 @@ class PandasOperator(InOutOperator):
     """
     def load_input(self, input_path, *args, **kwargs):
         try:
-            return pd.read_json(input_path, orient='split', typ='frame')
+            loaded_data = pd.read_json(input_path, orient='split', typ='frame')
         except ValueError:
-            return pd.read_json(input_path, orient='split', typ='series')
+            loaded_data = pd.read_json(input_path, orient='split', typ='series')
+        if isinstance(loaded_data.index, pd.DatetimeIndex):
+            loaded_data.index = loaded_data.index.tz_localize('UTC')
+        return loaded_data
 
     def save_output(self, ds, output_path, *args, **kwargs):
         if 'input_path' in kwargs and kwargs['input_path'] == output_path:
