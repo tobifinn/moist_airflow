@@ -32,6 +32,7 @@ from airflow.operators.bash_operator import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
 # Internal modules
+import moist_airflow.functions.utiltities as utils
 
 
 logger = logging.getLogger(__name__)
@@ -73,8 +74,12 @@ class FileAvailableOperator(BaseOperator):
             self._parent_dir = path
 
     def execute(self, context):
-        filename = context['execution_date'].strftime(self.filename_template)
-        file_path = os.path.join(self.parent_dir, filename)
+        file_path = utils.compose_address(
+            context['execution_date'], self.parent_dir, self.filename_template)
         if not os.path.isfile(file_path):
             raise FileNotFoundError(
                 'The given file path {0:s} couldn\'t found'.format(file_path))
+        else:
+            logger.info('The given file path {0:s} is available'.format(
+                file_path)
+            )

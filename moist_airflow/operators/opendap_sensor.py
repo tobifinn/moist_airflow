@@ -34,7 +34,7 @@ from airflow.operators.sensors import BaseSensorOperator
 from airflow.utils.decorators import apply_defaults
 
 # Internal modules
-from moist_airflow.functions import utilities as utils
+import moist_airflow.functions.utiltities as utils
 
 
 logger = logging.getLogger(__name__)

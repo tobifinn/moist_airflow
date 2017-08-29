@@ -31,6 +31,7 @@ import os
 import pandas as pd
 
 # Internal modules
+import moist_airflow.functions.utiltities as utils
 
 
 logger = logging.getLogger(__name__)
@@ -63,13 +64,13 @@ def df_extract_columns(input_path, input_template, output_path,
     -----
     Internally this is a wrapper around pandas.dataframe.loc
     """
-    input_filename = kwargs['execution_date'].strftime(input_template)
-    input_file_path = os.path.join(input_path, input_filename)
+    input_file_path = utils.compose_address(
+        kwargs['execution_date'], input_path, input_template)
     input_df = pd.read_json(input_file_path, orient='split',
                             typ='frame')
     if isinstance(input_df.index, pd.DatetimeIndex):
         input_df.index = input_df.index.tz_localize('UTC')
     output_df = input_df.loc[:, column_names]
-    output_filename = kwargs['execution_date'].strftime(output_template)
-    output_file_path = os.path.join(output_path, output_filename)
+    output_file_path = utils.compose_address(
+        kwargs['execution_date'], output_path, output_template)
     output_df.to_json(output_file_path, orient='split', date_format='iso')

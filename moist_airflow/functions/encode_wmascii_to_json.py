@@ -32,7 +32,7 @@ import pymepps
 # External modules
 
 # Internal modules
-
+import moist_airflow.functions.utiltities as utils
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +61,10 @@ def encode_wmascii_to_json(input_path, output_path,
         used within the strftime of contexts execution_date. So please see
         within the datetime documentation for format options.
     """
-    execution_date = kwargs['execution_date']
-    input_filename = execution_date.strftime(input_template)
-    output_filename = execution_date.strftime(output_template)
-    input_file_path = os.path.join(input_path, input_filename)
-    output_file_path = os.path.join(output_path, output_filename)
+    input_file_path = utils.compose_address(
+        kwargs['execution_date'], input_path, input_template)
+    output_file_path = utils.compose_address(
+        kwargs['execution_date'], output_path, output_template)
     ds = pymepps.open_station_dataset(input_file_path, 'wm', checking=False)
     df = ds.select_ds()
     df.to_json(output_file_path, orient='split', date_format='iso')

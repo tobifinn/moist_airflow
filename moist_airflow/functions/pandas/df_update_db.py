@@ -29,14 +29,12 @@ import os
 import datetime
 
 # External modules
-from airflow.operators.bash_operator import BaseOperator
-from airflow.utils.decorators import apply_defaults
-
 import pandas as pd
 
 import pymepps
 
 # Internal modules
+import moist_airflow.functions.utiltities as utils
 
 
 logger = logging.getLogger(__name__)
@@ -50,7 +48,7 @@ def df_update_another(input_path, input_template, another_path,
     Parameters
     ----------
     input_path : str
-        The folder where the original wettermast file is saved.
+        The folder where the original dataframe file is saved.
     another_path : str
         The folder where the json file should be saved.
     input_template : str
@@ -66,9 +64,8 @@ def df_update_another(input_path, input_template, another_path,
         dataframe. This could be used if the dataframe is used as database. If
         time_bound is None this limitation is skipped. Default is None
     """
-    execution_date = kwargs['execution_date']
-    another_filename = execution_date.strftime(another_template)
-    another_file_path = os.path.join(another_path, another_filename)
+    another_file_path = utils.compose_address(
+        kwargs['execution_date'], another_path, another_template)
     try:
         another_df = pd.read_json(another_file_path, orient='split',
                                   typ='frame')
@@ -77,15 +74,15 @@ def df_update_another(input_path, input_template, another_path,
                                   typ='series')
     if isinstance(another_df.index, pd.DatetimeIndex):
         another_df.index = another_df.index.tz_localize('UTC')
-    input_filename = execution_date.strftime(input_template)
-    input_file_path = os.path.join(input_path, input_filename)
+    input_file_path = utils.compose_address(
+        kwargs['execution_date'], input_path, input_template)
     if os.path.isfile(input_file_path):
         try:
             input_df = pd.read_json(input_file_path, orient='split',
-                                      typ='frame')
+                                    typ='frame')
         except ValueError:
             input_df = pd.read_json(input_file_path, orient='split',
-                                      typ='series')
+                                    typ='series')
         if isinstance(input_df.index, pd.DatetimeIndex):
             input_df.index = input_df.index.tz_localize('UTC')
         resulting_df = input_df.pp.update(another_df)
@@ -93,5 +90,5 @@ def df_update_another(input_path, input_template, another_path,
         resulting_df = another_df
     if isinstance(time_bound, datetime.timedelta):
         resulting_df = resulting_df.loc[
-            resulting_df.index>execution_date-time_bound]
+            resulting_df.index > kwargs['execution_date']-time_bound]
     resulting_df.to_json(input_file_path, orient='split', date_format='iso')
