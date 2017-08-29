@@ -56,11 +56,11 @@ class OpenDapSensor(BaseSensorOperator):
             non-changing part of the server address. The resulting address will
             be: server_static_path/server_template
         server_template : str or None, optional
-            The template for the non-static part of the server address. This
-            part is used to generate the non-static part based on the execution
-            date given by the airflow context. The filename template is passed
+            The template for the dynamic part of the server path. This
+            part is used to generate the dynamic part based on the execution
+            date given by the airflow context. The template is passed
             to strftime and have to be conform to the datetime format. If
-            server_template is None, the server address will be only the static
+            the template is None, the server path will have only the static
             part. Default is None.
         dt_rounding : datetime.timedelta or None, optional
             The exeuction date will be rounded to this timedelta instance. If
