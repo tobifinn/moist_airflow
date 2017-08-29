@@ -26,7 +26,7 @@ default_args = {
 FILE_PATH = '/home/tfinn/Data/test/measurement/wettermast'
 
 dag = DAG('extract_wettermast', default_args=default_args,
-          schedule_interval=datetime.timedelta(days=7),
+          schedule_interval=datetime.timedelta(minutes=15),
           orientation='TB')
 
 wm_sensor_task = FTPSensor(filename_template='%G_W%V_MASTER_M10.txt',
