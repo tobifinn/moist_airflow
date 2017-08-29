@@ -92,6 +92,8 @@ def dataset_slice_data(input_static_path, input_template=None,
     else:
         output_file_path = utils.compose_address(
             dataset_date, input_static_path, output_template)
+    logger.info('The input file is: {0:s}'.format(input_file_path))
+    logger.info('The output file is: {0:s}'.format(output_file_path))
     ds = xr.open_dataset(input_file_path)
     if variables is not None:
         ds = ds[variables]
@@ -100,6 +102,9 @@ def dataset_slice_data(input_static_path, input_template=None,
     if isinstance(sel, dict):
         ds = ds.sel(**sel)
     if output_file_path != input_file_path:
+        dirname = os.path.dirname(os.path.abspath(output_file_path))
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
         ds.to_netcdf(output_file_path)
         ds.close()
     else:
