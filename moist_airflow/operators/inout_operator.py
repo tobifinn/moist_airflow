@@ -28,7 +28,7 @@ import logging
 import abc
 
 # External modules
-from airflow.operators.bash_operator import BaseOperator
+from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
 # Internal modules
@@ -45,7 +45,7 @@ class InOutOperator(BaseOperator):
                  rounding_td=None, offset_td=None, op_args=None, op_kwargs=None,
                  provide_context=False, *args, **kwargs):
         """
-        The InOutOperator is an operator for standardized input and output.
+        The InOutOperator is a base operator for standardized input and output.
 
         Parameters
         ----------
@@ -108,7 +108,7 @@ class InOutOperator(BaseOperator):
         self.ds = None
 
     @abc.abstractmethod
-    def load_input(self, input_path):
+    def load_input(self, input_path, *args, **kwargs):
         """
         Load the input data.
 
@@ -125,7 +125,7 @@ class InOutOperator(BaseOperator):
         pass
 
     @abc.abstractmethod
-    def save_output(self, ds, output_path):
+    def save_output(self, ds, output_path, *args, **kwargs):
         """
         Save the output data.
         Parameters
@@ -158,12 +158,14 @@ class InOutOperator(BaseOperator):
         modified_date = utils.modify_date(
             context['execution_date'], self.rounding_td, self.offset_td
         )
-        ds = self.load_input(self.input_path(modified_date))
+        input_path = self.input_path(modified_date)
+        output_path = self.output_path(modified_date)
+        ds = self.load_input(input_path=input_path, output_path=output_path)
         if self.provide_context:
             context.update(self.op_kwargs)
             context['ds'] = ds
             self.op_kwargs = context
         ds, return_value = self.python_callable(*self.op_args, **self.op_kwargs)
-        self.save_output(ds, self.output_path(modified_date))
+        self.save_output(ds=ds, input_path=input_path, output_path=output_path)
         logging.info("Done. Returned value was: " + str(return_value))
         return return_value
