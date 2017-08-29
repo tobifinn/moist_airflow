@@ -27,8 +27,8 @@
 import logging
 import os
 
-from airflow.contrib.hooks.ftp_hook import FTPHook
 # External modules
+from airflow.contrib.hooks.ftp_hook import FTPHook
 from airflow.operators.bash_operator import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
