@@ -31,6 +31,7 @@ import datetime
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
+from airflow.contrib.hooks.fs_hook import FSHook
 
 # Internal modules
 from moist_airflow.operators.opendap_sensor import OpenDapSensor
@@ -44,15 +45,16 @@ logger = logging.getLogger(__name__)
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': datetime.datetime(2017, 9, 1, 5),
+    'start_date': datetime.datetime(2017, 8, 30, 23),
     'email': ['tfinn@live.com', ],
-    'email_on_failure': False,
+    'email_on_failure': True,
     'email_on_retry': False,
     'retries': 0,
     'retry_delay': datetime.timedelta(minutes=5),
 }
 
-FILE_PATH = '/home/tfinn/Data/test/model/metno/det'
+
+METNO_DET_HOOK = FSHook('metno_det_data')
 
 dag = DAG('extract_metno_det', default_args=default_args,
           schedule_interval=datetime.timedelta(hours=6),
@@ -64,7 +66,7 @@ rt_sensor = OpenDapSensor(
     dt_rounding=datetime.timedelta(hours=6),
     dt_offset=None,
     task_id='sensor_realtime',
-    timeout=60*60,
+    timeout=60*60*6,
     poke_interval=60,
     dag=dag)
 
@@ -75,7 +77,7 @@ rt_dl_t2m = PythonOperator(
         input_template='meps_det_extracted_2_5km_%Y%m%dT%HZ.nc',
         dt_rounding=datetime.timedelta(hours=6),
         dt_offset=None,
-        output_static_path=FILE_PATH,
+        output_static_path=METNO_DET_HOOK.get_path(),
         output_template='%Y%m%d_%H%M/t2m.nc',
         variables='air_temperature_2m',
         isel=dict(y=slice(0, 90), x=slice(210, 270))
@@ -93,7 +95,7 @@ rt_dl_extracted = PythonOperator(
         input_template='meps_det_extracted_2_5km_%Y%m%dT%HZ.nc',
         dt_rounding=datetime.timedelta(hours=6),
         dt_offset=None,
-        output_static_path=FILE_PATH,
+        output_static_path=METNO_DET_HOOK.get_path(),
         output_template='%Y%m%d_%H%M/extracted.nc',
         variables=None,
         isel=dict(y=slice(0, 90), x=slice(210, 270))
@@ -123,7 +125,7 @@ archive_dl_t2m = PythonOperator(
         input_template='%Y/%m/%d/meps_extracted_2_5km_%Y%m%dT%HZ.nc',
         dt_rounding=datetime.timedelta(hours=6),
         dt_offset=None,
-        output_static_path=FILE_PATH,
+        output_static_path=METNO_DET_HOOK.get_path(),
         output_template='%Y%m%d_%H%M/t2m.nc',
         variables='air_temperature_2m',
         isel=dict(y=slice(0, 90), x=slice(210, 270)),
@@ -143,7 +145,7 @@ archive_dl_extracted = PythonOperator(
         input_template='%Y/%m/%d/meps_extracted_2_5km_%Y%m%dT%HZ.nc',
         dt_rounding=datetime.timedelta(hours=6),
         dt_offset=None,
-        output_static_path=FILE_PATH,
+        output_static_path=METNO_DET_HOOK.get_path(),
         output_template='%Y%m%d_%H%M/extracted.nc',
         variables=None,
         isel=dict(y=slice(0, 90), x=slice(210, 270)),
@@ -156,14 +158,14 @@ archive_dl_extracted = PythonOperator(
 )
 
 available_t2m = FileAvailableOperator(
-    parent_dir=FILE_PATH,
+    parent_dir=METNO_DET_HOOK.get_path(),
     filename_template='%Y%m%d_%H%M/t2m.nc',
     task_id='realtime_t2m_checker',
     trigger_rule=TriggerRule.ALL_FAILED,
     dag=dag)
 
 available_extracted = FileAvailableOperator(
-    parent_dir=FILE_PATH,
+    parent_dir=METNO_DET_HOOK.get_path(),
     filename_template='%Y%m%d_%H%M/extracted.nc',
     task_id='realtime_extracted_checker',
     trigger_rule=TriggerRule.ALL_FAILED,
