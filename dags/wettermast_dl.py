@@ -7,17 +7,17 @@ from airflow.utils.trigger_rule import TriggerRule
 from moist_airflow.functions.pandas.df_update_db import df_update_another
 from moist_airflow.functions.encode_wmascii_to_json import \
     encode_wmascii_to_json
-from moist_airflow.functions.pandas.df_extract_columns import df_extract_columns
-from moist_airflow.operators.check_file_available import FileAvailableOperator
-from moist_airflow.operators.ftp_downloader import FTPDownloader
-from moist_airflow.operators.ftp_sensor import FTPSensor
+from moist_airflow.operators import FileAvailableOperator
+from moist_airflow.operators import FTPDownloader
+from moist_airflow.operators import FTPSensor
+from moist_airflow.operators import PandasOperator
 
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': datetime.datetime(2015, 6, 1),
+    'start_date': datetime.datetime(2017, 8, 25),
     'email': ['tfinn@live.com', ],
-    'email_on_failure': False,
+    'email_on_failure': True,
     'email_on_retry': False,
     'retries': 0,
     'retry_delay': datetime.timedelta(minutes=5),
@@ -63,11 +63,13 @@ encode_wm = PythonOperator(
     provide_context=True
 )
 
-todb_wm = PythonOperator(
+todb_wm = PandasOperator(
     python_callable=df_update_another,
+    input_static_path=FILE_PATH,
+    input_template='wm.json',
+    output_static_path=FILE_PATH,
+    output_template='wm.json',
     op_kwargs=dict(
-        input_path=FILE_PATH,
-        input_template='wm.json',
         another_path='/tmp',
         another_template='wettermast_%Y%m%d%H%M.json',
         time_bound=datetime.timedelta(days=7)
@@ -77,13 +79,17 @@ todb_wm = PythonOperator(
     dag=dag
 )
 
-prepare_plot = PythonOperator(
-    python_callable=df_extract_columns,
+
+def extract_columns(ds, column_names, *args, **kwargs):
+    return ds.loc[:, column_names]
+
+prepare_plot = PandasOperator(
+    python_callable=extract_columns,
+    input_static_path=FILE_PATH,
+    input_template='wm.json',
+    output_static_path=FILE_PATH,
+    output_template='plot_obs.json',
     op_kwargs=dict(
-        input_path=FILE_PATH,
-        input_template='wm.json',
-        output_path=FILE_PATH,
-        output_template='plot_obs.json',
         column_names='TT002_M10'
     ),
     provide_context=True,
