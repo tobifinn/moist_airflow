@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': datetime.datetime(2017, 8, 30, 23),
+    'start_date': datetime.datetime(2017, 8, 30, 21),
     'email': ['tfinn@live.com', ],
     'email_on_failure': True,
     'email_on_retry': False,
@@ -57,7 +57,7 @@ default_args = {
 
 METNO_DET_HOOK = FSHook('metno_det_data')
 
-dag = DAG('extract_metno_det', default_args=default_args,
+dag = DAG('extract_metno_det_v0.2', default_args=default_args,
           schedule_interval=datetime.timedelta(hours=6),
           orientation='TB')
 
@@ -69,6 +69,7 @@ rt_sensor = OpenDapSensor(
     task_id='sensor_realtime',
     timeout=60*60*6,
     poke_interval=60,
+    pool='sensor_pool',
     dag=dag)
 
 rt_dl_t2m = XarrayOperator(
@@ -87,6 +88,7 @@ rt_dl_t2m = XarrayOperator(
     trigger_rule=TriggerRule.ALL_SUCCESS,
     dag=dag
 )
+rt_dl_t2m.set_upstream(rt_sensor)
 
 rt_dl_extracted = XarrayOperator(
     python_callable=dataset_slice_data,
@@ -102,8 +104,10 @@ rt_dl_extracted = XarrayOperator(
     provide_context=True,
     task_id='realtime_extracted_download',
     trigger_rule=TriggerRule.ALL_SUCCESS,
+    pool='download_pool',
     dag=dag
 )
+rt_dl_extracted.set_upstream(rt_sensor)
 
 archive_sensor = OpenDapSensor(
     server_static_path='http://thredds.met.no/thredds/dodsC/meps25epsarchive',
@@ -114,7 +118,9 @@ archive_sensor = OpenDapSensor(
     timeout=1,
     poke_interval=1,
     trigger_rule=TriggerRule.ALL_FAILED,
+    pool='sensor_pool',
     dag=dag)
+archive_sensor.set_upstream(rt_sensor)
 
 archive_dl_t2m = XarrayOperator(
     python_callable=dataset_slice_data,
@@ -134,6 +140,7 @@ archive_dl_t2m = XarrayOperator(
     trigger_rule=TriggerRule.ALL_SUCCESS,
     dag=dag
 )
+archive_dl_t2m.set_upstream(archive_sensor)
 
 archive_dl_extracted = XarrayOperator(
     python_callable=dataset_slice_data,
@@ -151,8 +158,10 @@ archive_dl_extracted = XarrayOperator(
     provide_context=True,
     task_id='archive_extracted_download',
     trigger_rule=TriggerRule.ALL_SUCCESS,
+    pool='download_pool',
     dag=dag
 )
+archive_dl_extracted.set_upstream(archive_sensor)
 
 available_t2m = FileAvailableOperator(
     parent_dir=METNO_DET_HOOK.get_path(),
@@ -160,6 +169,7 @@ available_t2m = FileAvailableOperator(
     task_id='realtime_t2m_checker',
     trigger_rule=TriggerRule.ALL_FAILED,
     dag=dag)
+available_t2m.set_upstream(archive_sensor)
 
 available_extracted = FileAvailableOperator(
     parent_dir=METNO_DET_HOOK.get_path(),
@@ -167,12 +177,4 @@ available_extracted = FileAvailableOperator(
     task_id='realtime_extracted_checker',
     trigger_rule=TriggerRule.ALL_FAILED,
     dag=dag)
-
-rt_dl_t2m.set_upstream(rt_sensor)
-rt_dl_extracted.set_upstream(rt_sensor)
-archive_sensor.set_upstream(rt_sensor)
-
-archive_dl_t2m.set_upstream(archive_sensor)
-archive_dl_extracted.set_upstream(archive_sensor)
-available_t2m.set_upstream(archive_sensor)
 available_extracted.set_upstream(archive_sensor)

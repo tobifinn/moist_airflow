@@ -44,7 +44,7 @@ from moist_airflow.operators import PandasOperator
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': datetime.datetime(2017, 8, 30, 16, 45),
+    'start_date': datetime.datetime(2017, 8, 31, 11, 15),
     'email': ['tfinn@live.com', ],
     'email_on_failure': True,
     'email_on_retry': False,
@@ -57,7 +57,7 @@ DB_HOOK = FSHook('db_data')
 TMP_HOOK = FSHook('temporary_data')
 
 
-dag = DAG('extract_wettermast', default_args=default_args,
+dag = DAG('extract_wettermast_v0.2', default_args=default_args,
           schedule_interval=datetime.timedelta(minutes=15),
           orientation='TB')
 
@@ -67,6 +67,7 @@ wm_sensor_task = FTPSensor(filename_template='%G_W%V_MASTER_M10.txt',
                            task_id='sensor_ftp',
                            timeout=120,
                            poke_interval=10,
+                           pool='sensor_pool',
                            dag=dag)
 
 dl_task = FTPDownloader(filename_template='%G_W%V_MASTER_M10.txt',
@@ -76,12 +77,17 @@ dl_task = FTPDownloader(filename_template='%G_W%V_MASTER_M10.txt',
                         trigger_rule=TriggerRule.ALL_SUCCESS,
                         dag=dag)
 
+dl_task.set_upstream(wm_sensor_task)
+
+
 already_dl_task = FileAvailableOperator(
     parent_dir=DATA_HOOK.get_path(),
     filename_template='%G_W%V_MASTER_M10.txt',
     task_id='file_checker',
     trigger_rule=TriggerRule.ALL_FAILED,
     dag=dag)
+
+already_dl_task.set_upstream(wm_sensor_task)
 
 encode_wm = PythonOperator(
     python_callable=encode_wmascii_to_json,
@@ -91,15 +97,19 @@ encode_wm = PythonOperator(
     ),
     task_id='encoder_temp',
     trigger_rule=TriggerRule.ONE_SUCCESS,
+    pool='processing_pool',
     dag=dag,
     provide_context=True
 )
 
+encode_wm.set_upstream(dl_task)
+encode_wm.set_upstream(already_dl_task)
+
 todb_wm = PandasOperator(
     python_callable=df_update_another,
     input_static_path=DB_HOOK.get_path(),
-    input_template='wm_test.json',
-    output_static_path=DB_HOOK,
+    input_template='wettermast.json',
+    output_static_path=DB_HOOK.get_path(),
     output_template='wm_test.json',
     op_kwargs=dict(
         another_path=TMP_HOOK.get_path(),
@@ -108,8 +118,30 @@ todb_wm = PandasOperator(
     ),
     provide_context=True,
     task_id='add_to_db',
+    pool='processing_pool',
     dag=dag
 )
+
+todb_wm.set_upstream(encode_wm)
+
+
+def return_input(ds, *args, **kwargs):
+    return ds
+
+copy_temp_db = PandasOperator(
+    python_callable=return_input,
+    input_static_path=TMP_HOOK.get_path(),
+    input_template='wettermast_%Y%m%d%H%M.json',
+    output_static_path=DB_HOOK.get_path(),
+    output_template='wm_test.json',
+    provide_context=False,
+    task_id='copy_temp_to_db',
+    trigger_rule=TriggerRule.ALL_FAILED,
+    pool='processing_pool',
+    dag=dag
+)
+
+copy_temp_db.set_upstream(todb_wm)
 
 
 def extract_columns(ds, column_names, *args, **kwargs):
@@ -118,7 +150,7 @@ def extract_columns(ds, column_names, *args, **kwargs):
 prepare_plot = PandasOperator(
     python_callable=extract_columns,
     input_static_path=DB_HOOK.get_path(),
-    input_template='wm.json',
+    input_template='wm_test.json',
     output_static_path=TMP_HOOK.get_path(),
     output_template='plot_obs.json',
     op_kwargs=dict(
@@ -126,12 +158,10 @@ prepare_plot = PandasOperator(
     ),
     provide_context=True,
     task_id='extract_tt002',
+    trigger_rule=TriggerRule.ONE_SUCCESS,
+    pool='processing_pool',
     dag=dag
 )
 
-dl_task.set_upstream(wm_sensor_task)
-already_dl_task.set_upstream(wm_sensor_task)
-encode_wm.set_upstream(dl_task)
-encode_wm.set_upstream(already_dl_task)
-todb_wm.set_upstream(encode_wm)
 prepare_plot.set_upstream(todb_wm)
+prepare_plot.set_upstream(copy_temp_db)

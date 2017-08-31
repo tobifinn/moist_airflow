@@ -106,7 +106,6 @@ class InOutOperator(BaseOperator):
         self.output_template = output_template
         self.rounding_td = rounding_td
         self.offset_td = offset_td
-        self.ds = None
 
     @abc.abstractmethod
     def load_input(self, input_path, *args, **kwargs):
@@ -187,6 +186,8 @@ class InOutOperator(BaseOperator):
             context.update(self.op_kwargs)
             context['ds'] = ds
             self.op_kwargs = context
+        else:
+            self.op_kwargs['ds'] = ds
         return_value = self.python_callable(*self.op_args, **self.op_kwargs)
         if isinstance(return_value, tuple):
             ds = return_value[0]
