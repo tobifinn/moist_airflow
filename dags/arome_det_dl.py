@@ -35,6 +35,7 @@ from airflow.contrib.hooks.fs_hook import FSHook
 
 # Internal modules
 from moist_airflow.operators.opendap_sensor import OpenDapSensor
+from moist_airflow.operators.xarray_operator import XarrayOperator
 from moist_airflow.functions.xarray.ds_slice import dataset_slice_data
 from moist_airflow.operators.check_file_available import FileAvailableOperator
 
@@ -70,15 +71,14 @@ rt_sensor = OpenDapSensor(
     poke_interval=60,
     dag=dag)
 
-rt_dl_t2m = PythonOperator(
+rt_dl_t2m = XarrayOperator(
     python_callable=dataset_slice_data,
+    input_static_path='http://thredds.met.no/thredds/dodsC/meps25files',
+    input_template='meps_det_extracted_2_5km_%Y%m%dT%HZ.nc',
+    rounding_td=datetime.timedelta(hours=6),
+    output_static_path=METNO_DET_HOOK.get_path(),
+    output_template='%Y%m%d_%H%M/t2m.nc',
     op_kwargs=dict(
-        input_static_path='http://thredds.met.no/thredds/dodsC/meps25files',
-        input_template='meps_det_extracted_2_5km_%Y%m%dT%HZ.nc',
-        dt_rounding=datetime.timedelta(hours=6),
-        dt_offset=None,
-        output_static_path=METNO_DET_HOOK.get_path(),
-        output_template='%Y%m%d_%H%M/t2m.nc',
         variables='air_temperature_2m',
         isel=dict(y=slice(0, 90), x=slice(210, 270))
     ),
@@ -88,15 +88,14 @@ rt_dl_t2m = PythonOperator(
     dag=dag
 )
 
-rt_dl_extracted = PythonOperator(
+rt_dl_extracted = XarrayOperator(
     python_callable=dataset_slice_data,
+    input_static_path='http://thredds.met.no/thredds/dodsC/meps25files',
+    input_template='meps_det_extracted_2_5km_%Y%m%dT%HZ.nc',
+    rounding_td=datetime.timedelta(hours=6),
+    output_static_path=METNO_DET_HOOK.get_path(),
+    output_template='%Y%m%d_%H%M/extracted.nc',
     op_kwargs=dict(
-        input_static_path='http://thredds.met.no/thredds/dodsC/meps25files',
-        input_template='meps_det_extracted_2_5km_%Y%m%dT%HZ.nc',
-        dt_rounding=datetime.timedelta(hours=6),
-        dt_offset=None,
-        output_static_path=METNO_DET_HOOK.get_path(),
-        output_template='%Y%m%d_%H%M/extracted.nc',
         variables=None,
         isel=dict(y=slice(0, 90), x=slice(210, 270))
     ),
@@ -117,16 +116,15 @@ archive_sensor = OpenDapSensor(
     trigger_rule=TriggerRule.ALL_FAILED,
     dag=dag)
 
-archive_dl_t2m = PythonOperator(
+archive_dl_t2m = XarrayOperator(
     python_callable=dataset_slice_data,
+    input_static_path='http://thredds.met.no/thredds/dodsC'
+                      '/meps25epsarchive',
+    input_template='%Y/%m/%d/meps_extracted_2_5km_%Y%m%dT%HZ.nc',
+    rounding_td=datetime.timedelta(hours=6),
+    output_static_path=METNO_DET_HOOK.get_path(),
+    output_template='%Y%m%d_%H%M/t2m.nc',
     op_kwargs=dict(
-        input_static_path='http://thredds.met.no/thredds/dodsC'
-                           '/meps25epsarchive',
-        input_template='%Y/%m/%d/meps_extracted_2_5km_%Y%m%dT%HZ.nc',
-        dt_rounding=datetime.timedelta(hours=6),
-        dt_offset=None,
-        output_static_path=METNO_DET_HOOK.get_path(),
-        output_template='%Y%m%d_%H%M/t2m.nc',
         variables='air_temperature_2m',
         isel=dict(y=slice(0, 90), x=slice(210, 270)),
         sel=dict(ensemble_member=0)
@@ -137,16 +135,15 @@ archive_dl_t2m = PythonOperator(
     dag=dag
 )
 
-archive_dl_extracted = PythonOperator(
+archive_dl_extracted = XarrayOperator(
     python_callable=dataset_slice_data,
+    input_static_path='http://thredds.met.no/thredds/dodsC'
+                      '/meps25epsarchive',
+    input_template='%Y/%m/%d/meps_extracted_2_5km_%Y%m%dT%HZ.nc',
+    rounding_td=datetime.timedelta(hours=6),
+    output_static_path=METNO_DET_HOOK.get_path(),
+    output_template='%Y%m%d_%H%M/extracted.nc',
     op_kwargs=dict(
-        input_static_path='http://thredds.met.no/thredds/dodsC'
-                           '/meps25epsarchive',
-        input_template='%Y/%m/%d/meps_extracted_2_5km_%Y%m%dT%HZ.nc',
-        dt_rounding=datetime.timedelta(hours=6),
-        dt_offset=None,
-        output_static_path=METNO_DET_HOOK.get_path(),
-        output_template='%Y%m%d_%H%M/extracted.nc',
         variables=None,
         isel=dict(y=slice(0, 90), x=slice(210, 270)),
         sel=dict(ensemble_member=0)

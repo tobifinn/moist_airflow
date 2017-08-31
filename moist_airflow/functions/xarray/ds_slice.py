@@ -55,9 +55,15 @@ def dataset_slice_data(ds, variables=None, isel=None, sel=None, *args,
         this is None the dataset is not sliced. Default is None.
     """
     if variables is not None:
+        logger.info('These variables are sliced from the dataset: {0}'.format(
+            variables))
         ds = ds[variables]
     if isinstance(isel, dict):
+        logger.info('These are the arguments of the isel dict: {0}'.format(
+            isel))
         ds = ds.isel(**isel)
     if isinstance(sel, dict):
+        logger.info('These are the arguments of the sel dict: {0}'.format(
+            sel))
         ds = ds.sel(**sel)
-    return ds, None
+    return ds
