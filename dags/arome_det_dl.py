@@ -26,18 +26,24 @@
 # System modules
 import logging
 import datetime
+import os
 
 # External modules
 from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.contrib.hooks.fs_hook import FSHook
 
+import pandas as pd
+import xarray as xr
+
+import pymepps
+
 # Internal modules
-from moist_airflow.operators.opendap_sensor import OpenDapSensor
-from moist_airflow.operators.xarray_operator import XarrayOperator
+from moist_airflow.operators import OpenDapSensor
+from moist_airflow.operators import XarrayOperator
+from moist_airflow.operators import Xr2PdOperator
+from moist_airflow.operators import FileAvailableOperator
 from moist_airflow.functions.xarray.ds_slice import dataset_slice_data
-from moist_airflow.operators.check_file_available import FileAvailableOperator
 
 
 logger = logging.getLogger(__name__)
@@ -56,8 +62,9 @@ default_args = {
 
 
 METNO_DET_HOOK = FSHook('metno_det_data')
+DB_HOOK = FSHook('db_data')
 
-dag = DAG('extract_metno_det_v0.2', default_args=default_args,
+dag = DAG('extract_metno_det_v0.3', default_args=default_args,
           schedule_interval=datetime.timedelta(hours=6),
           orientation='TB')
 
@@ -178,3 +185,74 @@ available_extracted = FileAvailableOperator(
     trigger_rule=TriggerRule.ALL_FAILED,
     dag=dag)
 available_extracted.set_upstream(archive_sensor)
+
+
+def extract_t2m_wm(ds, *args, **kwargs):
+    ds = ds['air_temperature_2m']
+    # Extracted grid from arome metno files
+    grid_dir = FSHook('grid_data')
+    grid_file = os.path.join(grid_dir.get_path(), 'metno_grid')
+    grid_builder = pymepps.GridBuilder(grid_file)
+
+    ds.pp.grid = grid_builder.build_grid()
+
+    # Extract the nearest point to the Wettermast
+    pd_extracted = ds.pp.to_pandas((10.105139, 53.519917))
+
+    # Transform to degree celsius
+    pd_extracted -= 273.15
+    pd_extracted.index -= pd_extracted.index[0]
+    pd_extracted.columns = [kwargs['run_date'], ]
+    logger.info('The extracted T2m is:\n{0}'.format(str(pd_extracted)))
+
+    # Update the database
+    try:
+        loaded_data = pd.DataFrame.pp.load(kwargs['output_path'])
+        loaded_data.index = pd.TimedeltaIndex(loaded_data.index.values)
+        return loaded_data.pp.update(pd_extracted)
+    except FileNotFoundError:
+        return pd_extracted
+
+make_t2m_wm_fcst = Xr2PdOperator(
+    python_callable=extract_t2m_wm,
+    input_static_path=METNO_DET_HOOK.get_path(),
+    input_template='%Y%m%d_%H%M/t2m.nc',
+    rounding_td=datetime.timedelta(hours=6),
+    output_static_path=DB_HOOK.get_path(),
+    output_template='arome_metno_det.json',
+    provide_context=False,
+    task_id='extract_t2m_wm',
+    trigger_rule=TriggerRule.ONE_SUCCESS,
+    dag=dag
+)
+make_t2m_wm_fcst.set_upstream(rt_dl_t2m)
+make_t2m_wm_fcst.set_upstream(archive_dl_t2m)
+make_t2m_wm_fcst.set_upstream(available_t2m)
+
+
+def slice_wettermast(ds, *args, **kwargs):
+    logger.info(ds)
+    grid_dir = FSHook('grid_data')
+    grid_file = os.path.join(grid_dir.get_path(), 'metno_grid')
+    grid_builder = pymepps.GridBuilder(grid_file)
+    grid = grid_builder.build_grid()
+    nn = grid.nearest_point((53.519917, 10.105139))
+    logger.info('Select point: {0}'.format(nn))
+    ds = ds.isel(y=nn[0], x=nn[1])
+    return ds
+
+slice_wm_extracted = XarrayOperator(
+    python_callable=slice_wettermast,
+    input_static_path=METNO_DET_HOOK.get_path(),
+    input_template='%Y%m%d_%H%M/extracted.nc',
+    rounding_td=datetime.timedelta(hours=6),
+    output_static_path=METNO_DET_HOOK.get_path(),
+    output_template='%Y%m%d_%H%M/extracted_wm.nc',
+    task_id='slice_wettermast_extracted',
+    trigger_rule=TriggerRule.ONE_SUCCESS,
+    pool='processing_pool',
+    dag=dag
+)
+slice_wm_extracted.set_upstream(rt_dl_extracted)
+slice_wm_extracted.set_upstream(archive_dl_extracted)
+slice_wm_extracted.set_upstream(available_extracted)
