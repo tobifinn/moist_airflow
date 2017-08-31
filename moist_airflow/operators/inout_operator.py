@@ -27,10 +27,13 @@
 import logging
 import abc
 import os
+import glob
 
 # External modules
 from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
+
+import pymepps
 
 # Internal modules
 import moist_airflow.functions.utiltities as utils
@@ -176,18 +179,23 @@ class InOutOperator(BaseOperator):
             )
 
     def execute(self, context):
-        modified_date = utils.modify_date(
+        run_date = utils.modify_date(
             context['execution_date'], self.rounding_td, self.offset_td
         )
-        input_path = self.input_path(modified_date)
-        output_path = self.output_path(modified_date)
+        input_path = self.input_path(run_date)
+        output_path = self.output_path(run_date)
         ds = self.load_input(input_path=input_path, output_path=output_path)
+        self.op_kwargs.update(
+            {
+                'input_path': input_path,
+                'output_path': output_path,
+                'run_date': run_date,
+                'ds': ds
+            }
+        )
         if self.provide_context:
             context.update(self.op_kwargs)
-            context['ds'] = ds
             self.op_kwargs = context
-        else:
-            self.op_kwargs['ds'] = ds
         return_value = self.python_callable(*self.op_args, **self.op_kwargs)
         if isinstance(return_value, tuple):
             ds = return_value[0]
