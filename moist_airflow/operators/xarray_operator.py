@@ -86,9 +86,11 @@ class XarrayOperator(InOutOperator):
         need to define `**kwargs` in your function header.
     """
     def load_input(self, input_path, *args, **kwargs):
+        logger.info('Read the dataset from: {0:s}'.format(input_path))
         return xr.open_dataset(input_path)
 
     def save_output(self, ds, output_path, *args, **kwargs):
+        logger.info('Save the dataset to: {0:s}'.format(output_path))
         if 'input_path' in kwargs and kwargs['input_path'] == output_path:
             tmp_path = output_path+'.tmp'
             ds.to_netcdf(tmp_path)
@@ -96,5 +98,6 @@ class XarrayOperator(InOutOperator):
             os.remove(kwargs['input_path'])
             os.rename(tmp_path, output_path)
         else:
+            self._create_parent(output_path)
             ds.to_netcdf(output_path)
             ds.close()

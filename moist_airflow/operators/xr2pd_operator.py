@@ -96,4 +96,5 @@ class Xr2PdOperator(InOutOperator):
             os.remove(kwargs['input_path'])
             os.rename(tmp_path, output_path)
         else:
+            self._create_parent(output_path)
             ds.to_json(output_path, orient='split', date_format='iso')

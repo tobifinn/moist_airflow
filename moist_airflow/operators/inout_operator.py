@@ -26,6 +26,7 @@
 # System modules
 import logging
 import abc
+import os
 
 # External modules
 from airflow.models import BaseOperator
@@ -139,8 +140,29 @@ class InOutOperator(BaseOperator):
 
     def input_path(self, input_date):
         return utils.compose_address(input_date, self.input_static_path,
-                                     self.input_template
-        )
+                                     self.input_template)
+
+    @staticmethod
+    def _create_parent(path):
+        """
+        Check if the parent folder exists, if not create it.
+
+        Parameters
+        ----------
+        path : str
+            It is checked if the parent directory of this path exists.
+
+        Raises
+        ------
+        ValueError
+            If the parent dir is a file.
+        """
+        parent_dir = os.path.dirname(os.path.abspath(path))
+        if not os.path.exists(parent_dir):
+            os.makedirs(parent_dir)
+        elif os.path.isfile(parent_dir):
+            raise FileExistsError('The given parent dir {0:s} is a file and '
+                                  'not a directory!'.format(parent_dir))
 
     def output_path(self, output_date):
         if not self.output_static_path and not self.output_template:
